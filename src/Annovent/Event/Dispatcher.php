@@ -5,9 +5,16 @@ namespace Annovent\Event;
 class Dispatcher
 {
   private $eventListenerMatrix = array();
-  
-  public function notify(Event $event)
+    
+  public function notify( $name, array $namedParameters = null )
   {
+    $event = new Event($name, $namedParameters);
+    return $this->notifyEvent($event);
+  }
+  
+  public function notifyEvent(Event $event)
+  {
+    $result = true;
     if (array_key_exists($event->getName(), $this->eventListenerMatrix))
     {
       foreach ($this->eventListenerMatrix[$event->getName()] as $listenerInfo)
@@ -15,9 +22,11 @@ class Dispatcher
         $listener = $listenerInfo['listener'];
         $method = $listenerInfo['method'];
         
-        \call_user_func_named_array(array($listener,$method), $event->getParameters());
+        $callResult = \Annovent\call_user_func_assoc_array(array($listener,$method), $event->getParameters());
+        $result = $result && !($callResult == false);
       }
     }
+    return $result;
   }
   
   public function notityUntil(Event $event)
@@ -29,7 +38,8 @@ class Dispatcher
         $listener = $listenerInfo['listener'];
         $method = $listenerInfo['method'];
         
-        if( !\call_user_func_named_array(array($listener,$method), $event->getParameters()) ) {
+        if (\Annovent\call_user_func_assoc_array(array($listener,$method), $event->getParameters()))
+        {
           return false;
         }
       }
@@ -46,11 +56,12 @@ class Dispatcher
       if ($reflectedMethod->isPublic())
       {
         $docComment = $reflectedMethod->getDocComment();
-        $annotationFound = preg_match('^@event(.*)^', $docComment, $matches);
+        $annotationFound = (bool)preg_match('^@event(.*)^', $docComment, $matches);
         
         if ($annotationFound)
         {
-          $eventName = substr($matches[1], 1, strlen($matches[1]) - 2);
+          $eventName = str_replace(chr(13), '', $matches[1]);
+          $eventName = str_replace(' ', '', $eventName);
           
           $listenerInfo = array('listener' => $listener,'method' => $reflectedMethod->getName());
           
